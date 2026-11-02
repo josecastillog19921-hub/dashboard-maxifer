@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Comercial MAXIFER - Análisis General de Ventas</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS para procesamiento de Excel (.xls, .xlsx) y CSV -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- html2pdf.js para generación directa de informes PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen custom-scrollbar">
+
+    <!-- Header Navigation -->
+    <header class="bg-slate-900/90 border-b border-slate-800 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-gradient-to-tr from-cyan-600 to-blue-500 rounded-xl shadow-lg shadow-cyan-500/20">
+                    <i data-lucide="building-2" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-bold text-white tracking-wide">MAXIFER Commercial AI</h1>
+                        <span class="px-2 py-0.5 text-[10px] font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-full">General Sales Control</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Panel de Inteligencia Comercial & Evaluación General de Ventas</p>
+                </div>
+            </div>
+
+            <!-- Controls & Global Filters -->
+            <div class="flex flex-wrap items-center gap-2.5">
+                <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-1">
+                    <span class="text-xs text-slate-400 px-2 font-medium">Filtrar Almacén:</span>
+                    <select id="filterAlmacen" onchange="renderDashboard()" class="bg-slate-900 text-xs rounded-md px-2.5 py-1 text-white focus:outline-none border border-slate-700">
+                        <option value="TODOS">Todos los Almacenes</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-1">
+                    <span class="text-xs text-slate-400 px-2 font-medium">Mes:</span>
+                    <select id="filterMes" onchange="renderDashboard()" class="bg-slate-900 text-xs rounded-md px-2.5 py-1 text-white focus:outline-none border border-slate-700">
+                        <option value="TODOS">Todos los Meses</option>
+                        <option value="09">Septiembre 2026</option>
+                        <option value="10">Octubre 2026</option>
+                    </select>
+                </div>
+
+                <!-- Botón Generar PDF Completo -->
+                <button id="btnGeneratePDF" onclick="generatePDFReport()" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition shadow-lg shadow-emerald-600/20 border border-emerald-400/30">
+                    <i data-lucide="file-text" class="w-4 h-4"></i> Generar PDF Completo
+                </button>
+
+                <!-- Botón Cargar Excel -->
+                <label class="flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition cursor-pointer shadow-lg shadow-cyan-500/20 border border-cyan-400/30">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Cargar ventas 30.xls
+                    <input type="file" id="excelFileInput" accept=".xls,.xlsx,.csv" onchange="handleExcelUpload(event)" class="hidden">
+                </label>
+
+                <button onclick="exportCSV()" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition text-slate-300">
+                    <i data-lucide="download" class="w-4 h-4 text-emerald-400"></i> Exportar CSV
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Zona Drag & Drop -->
+        <div id="dropZone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleFileDrop(event)" class="border-2 border-dashed border-slate-800 hover:border-cyan-500/50 rounded-2xl p-4 text-center bg-slate-900/40 transition flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20">
+                    <i data-lucide="upload-cloud" class="w-5 h-5"></i>
+                </div>
+                <div class="text-left">
+                    <p class="text-xs font-bold text-slate-200">Carga tu archivo de Ventas Generales de MAXIFER (ventas 30.xls / .xlsx)</p>
+                    <p class="text-[11px] text-slate-400">Al cargar tu reporte, se actualizarán automáticamente todos los gráficos, KPIs y desgloses de MAXIFER.</p>
+                </div>
+            </div>
+            <span id="uploadStatusText" class="text-[11px] text-slate-500 italic">Esperando carga de datos...</span>
+        </div>
+
+        <!-- Top KPI Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 relative overflow-hidden shadow-xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-medium text-slate-400">Ventas Totales Netas</p>
+                        <h2 id="kpiVentaTotal" class="text-2xl font-black text-white mt-1">$0.00</h2>
+                        <div class="flex items-center gap-1.5 mt-2 text-[11px] text-emerald-400">
+                            <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
+                            <span id="kpiGrowth" class="font-bold">Total Acumulado MAXIFER</span>
+                        </div>
+                    </div>
+                    <div class="p-2.5 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 rounded-xl">
+                        <i data-lucide="dollar-sign" class="w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 relative overflow-hidden shadow-xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-medium text-slate-400">Unidades Vendidas</p>
+                        <h2 id="kpiUnidades" class="text-2xl font-black text-white mt-1">0 UND</h2>
+                        <p class="text-[11px] text-slate-400 mt-2">En <span id="kpiFacturas" class="font-bold text-slate-200">0</span> renglones de venta</p>
+                    </div>
+                    <div class="p-2.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl">
+                        <i data-lucide="boxes" class="w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 relative overflow-hidden shadow-xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-medium text-slate-400">Top Vendedor MAXIFER</p>
+                        <h2 id="kpiTopVendedor" class="text-lg font-extrabold text-white mt-1 truncate">-</h2>
+                        <p id="kpiTopVendedorMonto" class="text-[11px] text-emerald-400 font-semibold mt-1">$0.00 USD</p>
+                    </div>
+                    <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl">
+                        <i data-lucide="user-check" class="w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 relative overflow-hidden shadow-xl">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-xs font-medium text-slate-400">Top Almacén MAXIFER</p>
+                        <h2 id="kpiTopAlmacen" class="text-lg font-extrabold text-white mt-1 truncate">-</h2>
+                        <p id="kpiTopAlmacenMonto" class="text-[11px] text-cyan-400 font-semibold mt-1">$0.00 USD</p>
+                    </div>
+                    <div class="p-2.5 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-xl">
+                        <i data-lucide="warehouse" class="w-5 h-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Main Bar Chart -->
+            <div class="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i data-lucide="bar-chart-3" class="w-4 h-4 text-cyan-400"></i> Desempeño Comercial por Almacén / Período
+                        </h3>
+                        <p class="text-xs text-slate-400">Distribución de ingresos netos en USD</p>
+                    </div>
+                </div>
+                <div class="h-64 w-full">
+                    <canvas id="chartComparativa"></canvas>
+                </div>
+            </div>
+
+            <!-- Product Mix Doughnut Chart -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i data-lucide="pie-chart" class="w-4 h-4 text-blue-400"></i> Productos Más Vendidos
+                        </h3>
+                        <p class="text-xs text-slate-400">Participación en facturación ($ USD)</p>
+                    </div>
+                </div>
+                <div class="h-64 w-full flex items-center justify-center">
+                    <canvas id="chartProductos"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comprehensive Rankings Section -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- VENDEDORES RANKING -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
+                <div class="flex justify-between items-center pb-3 border-b border-slate-800 mb-3">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i> Ranking Vendedores MAXIFER
+                    </h3>
+                    <span class="text-[11px] text-slate-400">Clic para detalle</span>
+                </div>
+                <div id="listVendedores" class="space-y-2 overflow-y-auto max-h-80 pr-1 custom-scrollbar flex-1">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+
+            <!-- ALMACENES RANKING -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
+                <div class="flex justify-between items-center pb-3 border-b border-slate-800 mb-3">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i data-lucide="warehouse" class="w-4 h-4 text-purple-400"></i> Ranking Almacenes MAXIFER
+                    </h3>
+                    <span class="text-[11px] text-slate-400">Clic para detalle</span>
+                </div>
+                <div id="listAlmacenes" class="space-y-2 overflow-y-auto max-h-80 pr-1 custom-scrollbar flex-1">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+
+            <!-- CLIENTES RANKING -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
+                <div class="flex justify-between items-center pb-3 border-b border-slate-800 mb-3">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i data-lucide="building-2" class="w-4 h-4 text-cyan-400"></i> Principales Clientes (Razón Social)
+                    </h3>
+                    <span class="text-[11px] text-slate-400">Clic para detalle</span>
+                </div>
+                <div id="listClientes" class="space-y-2 overflow-y-auto max-h-80 pr-1 custom-scrollbar flex-1">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Performance Catalog -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i data-lucide="package-search" class="w-4 h-4 text-cyan-400"></i> Rendimiento por Producto / Descripción Comercial
+                    </h3>
+                    <p class="text-xs text-slate-400">Análisis detallado por descripción oficial y código del artículo</p>
+                </div>
+                <input type="text" id="searchProduct" onkeyup="filterProductTable()" placeholder="Buscar producto o descripción..." class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 w-full sm:w-64">
+            </div>
+
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-800">
+                        <tr>
+                            <th class="py-3 px-4">Código</th>
+                            <th class="py-3 px-4">Descripción del Producto</th>
+                            <th class="py-3 px-4 text-center">Renglones</th>
+                            <th class="py-3 px-4 text-center">Cant. Total Vendida</th>
+                            <th class="py-3 px-4 text-right">Monto Total ($ USD)</th>
+                            <th class="py-3 px-4 text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableProductsBody" class="divide-y divide-slate-800/60 font-medium">
+                        <!-- Dynamic -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Transaction Table / Renglones -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i data-lucide="receipt" class="w-4 h-4 text-emerald-400"></i> Registro de Operaciones y Facturas MAXIFER
+                    </h3>
+                    <p class="text-xs text-slate-400">Inspección detallada de transacciones procesadas</p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto max-h-96 custom-scrollbar">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider font-semibold sticky top-0 z-10 border-b border-slate-800">
+                        <tr>
+                            <th class="py-3 px-3">Empresa</th>
+                            <th class="py-3 px-3">N° Doc / Factura</th>
+                            <th class="py-3 px-3">Fecha</th>
+                            <th class="py-3 px-3">Vendedor</th>
+                            <th class="py-3 px-3">Almacén</th>
+                            <th class="py-3 px-3">Cliente</th>
+                            <th class="py-3 px-3">Producto</th>
+                            <th class="py-3 px-3 text-center">Cant.</th>
+                            <th class="py-3 px-3 text-right">Neto ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableTransactionsBody" class="divide-y divide-slate-800/60">
+                        <!-- Dynamic -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- CONTENEDOR DE PLANTILLA PDF COMPLETA (OCULTO EN PANTALLA) -->
+    <div style="display: none;">
+        <div id="pdfReportContainer" style="width: 800px; padding: 24px; background: #ffffff; color: #0f172a; font-family: 'Inter', sans-serif;">
+            <!-- Header Informe PDF -->
+            <div style="border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end;">
+                <div>
+                    <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0;">MAXIFER COMMERCIAL AI</h1>
+                    <p style="font-size: 11px; color: #0284c7; font-weight: bold; margin: 4px 0 0 0; text-transform: uppercase;">Informe Integral de Inteligencia Comercial y Control de Ventas</p>
+                </div>
+                <div style="text-align: right; font-size: 10px; color: #475569;">
+                    <p style="margin: 0;"><strong>Fecha de Emisión:</strong> <span id="pdfFechaEmision"></span></p>
+                    <p style="margin: 2px 0 0 0;"><strong>Filtro Almacén:</strong> <span id="pdfFiltroAlmacen">TODOS</span> | <strong>Filtro Mes:</strong> <span id="pdfFiltroMes">TODOS</span></p>
+                </div>
+            </div>
+
+            <!-- Resumen de KPIs Principales -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
+                <div style="border: 1px solid #cbd5e1; background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 9px; color: #64748b; font-weight: bold; text-transform: uppercase;">Ventas Totales Netas</div>
+                    <div id="pdfKpiVentas" style="font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 4px;">$0.00</div>
+                </div>
+                <div style="border: 1px solid #cbd5e1; background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 9px; color: #64748b; font-weight: bold; text-transform: uppercase;">Unidades Vendidas</div>
+                    <div id="pdfKpiUnidades" style="font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 4px;">0 UND</div>
+                    <div style="font-size: 8px; color: #64748b; margin-top: 2px;">en <span id="pdfKpiRenglones">0</span> renglones</div>
+                </div>
+                <div style="border: 1px solid #cbd5e1; background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 9px; color: #64748b; font-weight: bold; text-transform: uppercase;">Top Vendedor</div>
+                    <div id="pdfKpiVendedor" style="font-size: 11px; font-weight: 800; color: #0f172a; margin-top: 4px;">-</div>
+                    <div id="pdfKpiVendedorMonto" style="font-size: 9px; color: #16a34a; font-weight: bold;">$0.00</div>
+                </div>
+                <div style="border: 1px solid #cbd5e1; background: #f8fafc; padding: 10px; border-radius: 6px;">
+                    <div style="font-size: 9px; color: #64748b; font-weight: bold; text-transform: uppercase;">Top Almacén</div>
+                    <div id="pdfKpiAlmacen" style="font-size: 11px; font-weight: 800; color: #0f172a; margin-top: 4px;">-</div>
+                    <div id="pdfKpiAlmacenMonto" style="font-size: 9px; color: #0284c7; font-weight: bold;">$0.00</div>
+                </div>
+            </div>
+
+            <!-- Gráficos Renderizados -->
+            <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-bottom: 20px;">
+                <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; text-align: center;">
+                    <h4 style="font-size: 10px; font-weight: bold; color: #0f172a; margin: 0 0 6px 0;">Ventas por Almacén / Período ($ USD)</h4>
+                    <img id="pdfImgChartComparativa" style="max-width: 100%; height: 160px; object-fit: contain;" />
+                </div>
+                <div style="border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; text-align: center;">
+                    <h4 style="font-size: 10px; font-weight: bold; color: #0f172a; margin: 0 0 6px 0;">Participación Top Productos</h4>
+                    <img id="pdfImgChartProductos" style="max-width: 100%; height: 160px; object-fit: contain;" />
+                </div>
+            </div>
+
+            <!-- Tablas de Rankings (Vendedores, Almacenes, Clientes) -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+                <div>
+                    <h3 style="font-size: 10px; font-weight: bold; color: #0f172a; border-bottom: 1.5px solid #0284c7; padding-bottom: 3px; margin: 0 0 6px 0;">RANKING VENDEDORES</h3>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+                        <thead>
+                            <tr style="background: #f1f5f9; text-align: left;">
+                                <th style="padding: 3px;">Vendedor</th>
+                                <th style="padding: 3px; text-align: center;">Cant.</th>
+                                <th style="padding: 3px; text-align: right;">Total ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdfTableVendedores"></tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h3 style="font-size: 10px; font-weight: bold; color: #0f172a; border-bottom: 1.5px solid #0284c7; padding-bottom: 3px; margin: 0 0 6px 0;">RANKING ALMACENES</h3>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+                        <thead>
+                            <tr style="background: #f1f5f9; text-align: left;">
+                                <th style="padding: 3px;">Almacén</th>
+                                <th style="padding: 3px; text-align: center;">Cant.</th>
+                                <th style="padding: 3px; text-align: right;">Total ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdfTableAlmacenes"></tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h3 style="font-size: 10px; font-weight: bold; color: #0f172a; border-bottom: 1.5px solid #0284c7; padding-bottom: 3px; margin: 0 0 6px 0;">TOP CLIENTES</h3>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+                        <thead>
+                            <tr style="background: #f1f5f9; text-align: left;">
+                                <th style="padding: 3px;">Cliente</th>
+                                <th style="padding: 3px; text-align: right;">Total ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdfTableClientes"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tabla de Rendimiento por Producto -->
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 10px; font-weight: bold; color: #0f172a; border-bottom: 1.5px solid #0284c7; padding-bottom: 3px; margin: 0 0 6px 0;">CATÁLOGO Y RENDIMIENTO DE PRODUCTOS</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+                    <thead>
+                        <tr style="background: #f1f5f9; text-align: left;">
+                            <th style="padding: 4px;">Código</th>
+                            <th style="padding: 4px;">Descripción Comercial</th>
+                            <th style="padding: 4px; text-align: center;">Renglones</th>
+                            <th style="padding: 4px; text-align: center;">Cant. Vendida</th>
+                            <th style="padding: 4px; text-align: right;">Monto Total ($ USD)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pdfTableProductos"></tbody>
+                </table>
+            </div>
+
+            <!-- Tabla de Transacciones y Operaciones (Detalle Renglones) -->
+            <div style="margin-bottom: 16px;">
+                <h3 style="font-size: 10px; font-weight: bold; color: #0f172a; border-bottom: 1.5px solid #0284c7; padding-bottom: 3px; margin: 0 0 6px 0;">REGISTRO DETALLADO DE TRANSACCIONES Y OPERACIONES</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 8.5px;">
+                    <thead>
+                        <tr style="background: #f1f5f9; text-align: left;">
+                            <th style="padding: 3px;">Empresa</th>
+                            <th style="padding: 3px;">N° Doc</th>
+                            <th style="padding: 3px;">Fecha</th>
+                            <th style="padding: 3px;">Vendedor</th>
+                            <th style="padding: 3px;">Almacén</th>
+                            <th style="padding: 3px;">Cliente</th>
+                            <th style="padding: 3px;">Producto</th>
+                            <th style="padding: 3px; text-align: center;">Cant.</th>
+                            <th style="padding: 3px; text-align: right;">Neto ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pdfTableTransacciones"></tbody>
+                </table>
+            </div>
+
+            <div style="border-top: 1px solid #e2e8f0; padding-top: 6px; font-size: 8px; color: #64748b; text-align: center;">
+                Informe Ejecutivo generado dinámicamente por MAXIFER Commercial AI — Documento Confidencial de Uso Interno.
+            </div>
+        </div>
+    </div>
+
+    <!-- DRILL DOWN MODAL -->
+    <div id="detailModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl relative max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-start border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                    <div id="modalIcon" class="p-2.5 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20">
+                        <i data-lucide="info" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 id="modalTitle" class="text-base font-bold text-white">Detalle de Entidad</h3>
+                        <p id="modalSubtitle" class="text-xs text-slate-400">Desglose completo de transacciones</p>
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div id="modalContent" class="space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-1 text-xs">
+                <!-- Dynamic Content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de la aplicación y lógica PDF -->
+    <script>
+        const productDescriptions = {
+            "PM45": "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)",
+            "PM50": "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)",
+            "PM65": "Bomba Periférica Pentax PM65 0.7 HP (110V 60Hz)",
+            "PM80": "Bomba Periférica Pentax PM80 1.0 HP (110V 60Hz)",
+            "CM50N/60": "Bomba Centrífuga Pentax CM50N 0.5 HP 110V",
+            "CM75/60": "Bomba Centrífuga Pentax CM75/60 0.8 HP 110V",
+            "CM100/60": "Bomba Centrífuga Pentax CM100/60 1.0 HP 110V",
+            "CM164/00": "Bomba Centrífuga Pentax CM164/00 1.5 HP 220V",
+            "CM214/00": "Bomba Centrífuga Pentax CM214/00 2.5 HP 220V",
+            "CM314/00": "Bomba Centrífuga Pentax CM314/00 3.0 HP 220V",
+            "CAM100N/60": "Bomba Autocebante Pentax CAM100N 1.0 HP 110V",
+            "MD100-G": "Bomba Autocebante para Gasoil Pentax MD100-G 1.0 HP",
+            "AQUADOMUS": "Sistema Presurizador Pentax AQUADOMUS 1x115/230V",
+            "PRESSOFLUSSOSTATO": "Regulador de Presión Hidromatic Pressoflussostato Pentax",
+            "H2+ MAN": "Regulador de Presión Hidromatic H2+ Manómetro Pentax",
+            "DPM 3/3G": "Bomba Achique / Sumergible Pentax DPM 3/3G 1.0 HP",
+            "DG100G": "Bomba Sumergible Aguas Negras Pentax DG100G 1.0 HP",
+            "DTR101G": "Bomba Trituradora Sumergible Pentax DTR101G 1.0 HP",
+            "INOX80N/60": "Bomba Autocebante Inoxidable Pentax INOX80N 0.8 HP",
+            "DPX-100": "Bomba Achique Plástico Pentax DPX-100 1.0 HP"
+        };
+
+        let salesData = [
+            { empresa: "MAXIFER", factura: "000082396", fecha: "2026-09-30", vendedor: "COL001", almacen: "CBBO", cliente: "HIDRORIEGOSOLD, C.A", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 3, neto: 214.50 },
+            { empresa: "MAXIFER", factura: "000081496", fecha: "2026-09-01", vendedor: "OFI11", almacen: "01", cliente: "NOVO MARKET 25, C.A.", producto: "PM80", descripcion: "Bomba Periférica Pentax PM80 1.0 HP (110V 60Hz)", cantidad: 1, neto: 798.33 },
+            { empresa: "MAXIFER", factura: "500027167", fecha: "2026-09-29", vendedor: "OFI19", almacen: "01", cliente: "Victor Riera", producto: "PM80", descripcion: "Bomba Periférica Pentax PM80 1.0 HP (110V 60Hz)", cantidad: 1, neto: 479.50 },
+            { empresa: "MAXIFER", factura: "500027167", fecha: "2026-09-29", vendedor: "OFI19", almacen: "01", cliente: "Victor Riera", producto: "PRESSOFLUSSOSTATO", descripcion: "Regulador de Presión Hidromatic Pressoflussostato Pentax", cantidad: 1, neto: 479.50 },
+            { empresa: "MAXIFER", factura: "000082396", fecha: "2026-09-30", vendedor: "COL001", almacen: "CBBO", cliente: "HIDRORIEGOSOLD, C.A", producto: "MD100-G", descripcion: "Bomba Autocebante para Gasoil Pentax MD100-G 1.0 HP", cantidad: 1, neto: 859.06 },
+            { empresa: "MAXIFER", factura: "000082424", fecha: "2026-09-30", vendedor: "PIC001", almacen: "ORIENT", cliente: "HIDRO BOMBAS CARONI 2021", producto: "MD100-G", descripcion: "Bomba Autocebante para Gasoil Pentax MD100-G 1.0 HP", cantidad: 1, neto: 859.06 },
+            { empresa: "MAXIFER", factura: "000082397", fecha: "2026-09-30", vendedor: "COL001", almacen: "CBBO", cliente: "SERVIFERCA, C.A.", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 3, neto: 859.06 },
+            { empresa: "MAXIFER", factura: "000082398", fecha: "2026-09-30", vendedor: "COL001", almacen: "CBBO", cliente: "FERRETERIA EL CARIÑO ES EL MISMO", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 3, neto: 859.06 },
+            { empresa: "MAXIFER", factura: "000082391", fecha: "2026-09-30", vendedor: "DIA002", almacen: "CCS", cliente: "HIDROMAX, C.A.", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 2, neto: 859.06 },
+            { empresa: "MAXIFER", factura: "000082392", fecha: "2026-09-30", vendedor: "COL001", almacen: "CBBO", cliente: "INVERSIONES WUAYU,C.A", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 3, neto: 859.06 },
+            { empresa: "MAXIFER", factura: "000082393", fecha: "2026-09-30", vendedor: "COL001", almacen: "CBBO", cliente: "MULTIVENTAS GOTOVAL, C.A", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 3, neto: 859.06 },
+            { empresa: "MAXIFER", factura: "000082394", fecha: "2026-09-30", vendedor: "COL001", almacen: "CBBO", cliente: "INVERSIONES BRILLANTES CLEAN C.A", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 1, neto: 429.53 },
+            { empresa: "MAXIFER", factura: "000082394", fecha: "2026-09-30", vendedor: "COL001", almacen: "CBBO", cliente: "INVERSIONES BRILLANTES CLEAN C.A", producto: "CM50N/60", descripcion: "Bomba Centrífuga Pentax CM50N 0.5 HP 110V", cantidad: 1, neto: 429.53 },
+            { empresa: "MAXIFER", factura: "000082786", fecha: "2026-10-14", vendedor: "JIM001", almacen: "TACHIR", cliente: "FERRETERIA EL NARANJITO C.A.", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 1, neto: 877.90 },
+            { empresa: "MAXIFER", factura: "000082790", fecha: "2026-10-14", vendedor: "JIM001", almacen: "TACHIR", cliente: "FERRETERIA EL NARANJITO C.A.", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 2, neto: 877.90 },
+            { empresa: "MAXIFER", factura: "000082813", fecha: "2026-10-15", vendedor: "RUI01", almacen: "CBBO", cliente: "BRIGIDA MARGARITA QUIJADA WETTEL", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 1, neto: 879.12 },
+            { empresa: "MAXIFER", factura: "000083135", fecha: "2026-10-27", vendedor: "MOR001", almacen: "TACHIR", cliente: "DICA DISTRIBUCIONES C.A", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 2, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000083136", fecha: "2026-10-27", vendedor: "MOR001", almacen: "TACHIR", cliente: "HIERRO LA FRIA, C.A.", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 5, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000082933", fecha: "2026-10-20", vendedor: "JIM001", almacen: "TACHIR", cliente: "FERRETERIA EL NARANJITO C.A.", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 1, neto: 881.88 },
+            { empresa: "MAXIFER", factura: "000082934", fecha: "2026-10-20", vendedor: "JIM001", almacen: "TACHIR", cliente: "Wuilmer Argenis Carreño Tobón", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 3, neto: 881.88 },
+            { empresa: "MAXIFER", factura: "500027273", fecha: "2026-10-08", vendedor: "OFI10", almacen: "01", cliente: "Nellys Rincón", producto: "PM45", descripcion: "Bomba Periférica Pentax PM45 0.5 HP (110V 60Hz)", cantidad: 1, neto: 497.85 },
+            { empresa: "MAXIFER", factura: "000082745", fecha: "2026-10-13", vendedor: "OFI01", almacen: "01", cliente: "AGROPECUARIA V&T, C.A", producto: "PM80", descripcion: "Bomba Periférica Pentax PM80 1.0 HP (110V 60Hz)", cantidad: 1, neto: 876.80 },
+            { empresa: "MAXIFER", factura: "000082934", fecha: "2026-10-20", vendedor: "JIM001", almacen: "TACHIR", cliente: "Wuilmer Argenis Carreño Tobón", producto: "AQUADOMUS", descripcion: "Sistema Presurizador Pentax AQUADOMUS 1x115/230V", cantidad: 1, neto: 881.88 },
+            { empresa: "MAXIFER", factura: "000083009", fecha: "2026-10-23", vendedor: "COL001", almacen: "CBBO", cliente: "INVERSIONES BRILLANTES CLEAN C.A", producto: "AQUADOMUS", descripcion: "Sistema Presurizador Pentax AQUADOMUS 1x115/230V", cantidad: 1, neto: 884.75 },
+            { empresa: "MAXIFER", factura: "500027273", fecha: "2026-10-08", vendedor: "OFI10", almacen: "01", cliente: "Nellys Rincón", producto: "PRESSOFLUSSOSTATO", descripcion: "Regulador de Presión Hidromatic Pressoflussostato Pentax", cantidad: 1, neto: 497.85 },
+            { empresa: "MAXIFER", factura: "000082660", fecha: "2026-10-08", vendedor: "MOR001", almacen: "TACHIR", cliente: "SURTI-AGRO LOS ANDES C.A", producto: "MD100-G", descripcion: "Bomba Autocebante para Gasoil Pentax MD100-G 1.0 HP", cantidad: 1, neto: 874.73 },
+            { empresa: "MAXIFER", factura: "000083097", fecha: "2026-10-26", vendedor: "GON001", almacen: "CCS", cliente: "TUBO CENTER DC, C.A.", producto: "MD100-G", descripcion: "Bomba Autocebante para Gasoil Pentax MD100-G 1.0 HP", cantidad: 1, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000082899", fecha: "2026-10-19", vendedor: "JIM002", almacen: "BARINA", cliente: "Julio Enrique Méndez Parra", producto: "MD100-G", descripcion: "Bomba Autocebante para Gasoil Pentax MD100-G 1.0 HP", cantidad: 1, neto: 881.06 },
+            { empresa: "MAXIFER", factura: "000083139", fecha: "2026-10-27", vendedor: "JIM001", almacen: "TACHIR", cliente: "Wuilmer Argenis Carreño Tobón", producto: "MD100-G", descripcion: "Bomba Autocebante para Gasoil Pentax MD100-G 1.0 HP", cantidad: 2, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000083135", fecha: "2026-10-27", vendedor: "MOR001", almacen: "TACHIR", cliente: "DICA DISTRIBUCIONES C.A", producto: "MD100-G", descripcion: "Bomba Autocebante para Gasoil Pentax MD100-G 1.0 HP", cantidad: 1, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000082660", fecha: "2026-10-08", vendedor: "MOR001", almacen: "TACHIR", cliente: "SURTI-AGRO LOS ANDES C.A", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 5, neto: 874.73 },
+            { empresa: "MAXIFER", factura: "000082647", fecha: "2026-10-08", vendedor: "MOR001", almacen: "TACHIR", cliente: "Giovanny Mayorga Cuervo", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 3, neto: 874.73 },
+            { empresa: "MAXIFER", factura: "000082655", fecha: "2026-10-08", vendedor: "RUI01", almacen: "ORIENT", cliente: "BRIGIDA MARGARITA QUIJADA WETTEL", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 1, neto: 874.73 },
+            { empresa: "MAXIFER", factura: "000082449", fecha: "2026-10-01", vendedor: "GON001", almacen: "CCS", cliente: "INVERSIONES HIDRO CENTER CATIA", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 3, neto: 860.17 },
+            { empresa: "MAXIFER", factura: "000082450", fecha: "2026-10-01", vendedor: "GON001", almacen: "CCS", cliente: "SOLOTANQUES LECUNA, C.A", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 3, neto: 860.17 },
+            { empresa: "MAXIFER", factura: "000082814", fecha: "2026-10-15", vendedor: "JIM001", almacen: "TACHIR", cliente: "COMERCIALIZADORA DON PEDRO", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 1, neto: 879.12 },
+            { empresa: "MAXIFER", factura: "000083136", fecha: "2026-10-27", vendedor: "MOR001", almacen: "TACHIR", cliente: "HIERRO LA FRIA, C.A.", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 5, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000083135", fecha: "2026-10-27", vendedor: "MOR001", almacen: "TACHIR", cliente: "DICA DISTRIBUCIONES C.A", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 1, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000083140", fecha: "2026-10-27", vendedor: "MOR001", almacen: "TACHIR", cliente: "MATERIALES NUEVO TRIUNFO C.A", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 2, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000082899", fecha: "2026-10-19", vendedor: "JIM002", almacen: "BARINA", cliente: "Julio Enrique Méndez Parra", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 10, neto: 881.06 },
+            { empresa: "MAXIFER", factura: "000082935", fecha: "2026-10-20", vendedor: "MOR001", almacen: "TACHIR", cliente: "DICA DISTRIBUCIONES C.A", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 1, neto: 881.88 },
+            { empresa: "MAXIFER", factura: "000082932", fecha: "2026-10-20", vendedor: "JIM001", almacen: "TACHIR", cliente: "COMERCIALIZADORA DON PEDRO", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 2, neto: 881.88 },
+            { empresa: "MAXIFER", factura: "000083105", fecha: "2026-10-26", vendedor: "PIC001", almacen: "ORIENT", cliente: "HIDRO BOMBAS CARONI 2021", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 2, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000083117", fecha: "2026-10-26", vendedor: "MOR001", almacen: "TACHIR", cliente: "N° 2 VENEHIERROS C.A.", producto: "PM50", descripcion: "Bomba Periférica Pentax PM50 0.5 HP (110V 60Hz)", cantidad: 3, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000082933", fecha: "2026-10-20", vendedor: "JIM001", almacen: "TACHIR", cliente: "FERRETERIA EL NARANJITO C.A.", producto: "CAM100N/60", descripcion: "Bomba Autocebante Pentax CAM100N 1.0 HP 110V", cantidad: 1, neto: 881.88 },
+            { empresa: "MAXIFER", factura: "000083139", fecha: "2026-10-27", vendedor: "JIM001", almacen: "TACHIR", cliente: "Wuilmer Argenis Carreño Tobón", producto: "DPM 3/3G", descripcion: "Bomba Achique / Sumergible Pentax DPM 3/3G 1.0 HP", cantidad: 1, neto: 887.30 },
+            { empresa: "MAXIFER", factura: "000082660", fecha: "2026-10-08", vendedor: "MOR001", almacen: "TACHIR", cliente: "SURTI-AGRO LOS ANDES C.A", producto: "DG100G", descripcion: "Bomba Sumergible Aguas Negras Pentax DG100G 1.0 HP", cantidad: 1, neto: 874.73 },
+            { empresa: "MAXIFER", factura: "000082934", fecha: "2026-10-20", vendedor: "JIM001", almacen: "TACHIR", cliente: "Wuilmer Argenis Carreño Tobón", producto: "DTR101G", descripcion: "Bomba Trituradora Sumergible Pentax DTR101G 1.0 HP", cantidad: 1, neto: 881.88 },
+            { empresa: "MAXIFER", factura: "000082932", fecha: "2026-10-20", vendedor: "JIM001", almacen: "TACHIR", cliente: "COMERCIALIZADORA DON PEDRO", producto: "INOX80N/60", descripcion: "Bomba Autocebante Inoxidable Pentax INOX80N 0.8 HP", cantidad: 1, neto: 881.88 },
+            { empresa: "MAXIFER", factura: "000082776", fecha: "2026-10-14", vendedor: "OFI11", almacen: "01", cliente: "Marbella Guillén", producto: "DPX-100", descripcion: "Bomba Achique Plástico Pentax DPX-100 1.0 HP", cantidad: 1, neto: 877.90 }
+        ];
+
+        window.salesData = salesData;
+
+        function parseNumericField(val) {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            let str = String(val).trim();
+            if (str.includes(',') && str.includes('.')) {
+                if (str.indexOf('.') < str.indexOf(',')) {
+                    str = str.replace(/\./g, '').replace(',', '.');
+                } else {
+                    str = str.replace(/,/g, '');
+                }
+            } else if (str.includes(',')) {
+                str = str.replace(',', '.');
+            }
+            str = str.replace(/[^0-9.-]/g, '');
+            return parseFloat(str) || 0;
+        }
+
+        function parseExcelRows(rows) {
+            const records = [];
+            rows.forEach(row => {
+                const keys = Object.keys(row);
+                const getVal = (possibleKeys) => {
+                    const key = keys.find(k => possibleKeys.some(p => {
+                        const cleanKey = k.toString().toLowerCase().replace(/\./g, '').trim();
+                        const cleanPattern = p.toLowerCase().replace(/\./g, '').trim();
+                        return cleanKey === cleanPattern || cleanKey.includes(cleanPattern);
+                    }));
+                    return key ? row[key] : null;
+                };
+
+                const netoRaw = getVal(['monto_neto', 'total_neto', 'val_neto', 'total', 'neto', 'monto', 'subtotal', 'precio_total']) || 0;
+                const parsedNeto = parseNumericField(netoRaw);
+                const empresaRaw = getVal(['empresa', 'compañia', 'origen']) || "MAXIFER";
+                const facturaRaw = getVal(['factura', 'numero', 'n° doc', 'doc', 'num', 'co_documento']) || "DOC-" + Math.floor(Math.random()*10000);
+                const fechaRaw = getVal(['fecha', 'emision', 'fec_emis', 'date']) || new Date().toISOString().split('T')[0];
+                const vendedorRaw = getVal(['vendedor', 'vend', 'vendedor_id', 'co_ven']) || "OFI01";
+                const almacenRaw = getVal(['alm.', 'alm', 'almacen', 'almacén', 'co_alma', 'deposito', 'alma', 'sucursal', 'ubi', 'ubicacion']) || "01";
+                
+                const clienteNombre = getVal(['cli_des', 'razon social', 'razón social', 'nombre cliente', 'nombre_cli', 'nombre', 'cliente']);
+                const clienteCodigo = getVal(['co_cli', 'codigo_cliente', 'cod_cli']);
+                const clienteRaw = clienteNombre || clienteCodigo || "CLIENTE GENERAL";
+
+                const productoRaw = getVal(['codigo', 'código', 'co_art', 'producto', 'articulo', 'artículo', 'item']) || "PM50";
+                const descRaw = getVal(['descripcion', 'descripción', 'art_des', 'nombre_art', 'nom_art']) || "";
+                const cantidadRaw = getVal(['cantidad', 'cant', 'total_art', 'qty']) || 1;
+
+                let formattedDate = "2026-10-01";
+                if (fechaRaw) {
+                    if (fechaRaw instanceof Date) {
+                        formattedDate = fechaRaw.toISOString().split('T')[0];
+                    } else {
+                        const strDate = String(fechaRaw).trim();
+                        if (strDate.includes('/')) {
+                            const parts = strDate.split('/');
+                            if (parts.length === 3) {
+                                const day = parts[0].padStart(2, '0');
+                                const month = parts[1].padStart(2, '0');
+                                const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+                                formattedDate = `${year}-${month}-${day}`;
+                            }
+                        } else if (strDate.includes('-')) {
+                            formattedDate = strDate.split('T')[0];
+                        }
+                    }
+                }
+
+                let cleanProductCode = String(productoRaw).trim().toUpperCase();
+                let cleanDesc = String(descRaw).trim();
+                if (!cleanDesc) {
+                    cleanDesc = productDescriptions[cleanProductCode] || cleanProductCode;
+                }
+
+                let cleanAlmacen = String(almacenRaw).trim().toUpperCase();
+                if (!cleanAlmacen || cleanAlmacen === "" || cleanAlmacen === "NULL") cleanAlmacen = "01";
+
+                const parsedCant = Math.max(1, Math.round(parseNumericField(cantidadRaw)));
+
+                records.push({
+                    empresa: String(empresaRaw).trim().toUpperCase().includes('RESINCA') ? 'RESINCA' : 'MAXIFER',
+                    factura: String(facturaRaw).trim(),
+                    fecha: formattedDate,
+                    vendedor: String(vendedorRaw).trim().toUpperCase(),
+                    almacen: cleanAlmacen,
+                    cliente: String(clienteRaw).trim(),
+                    producto: cleanProductCode,
+                    descripcion: cleanDesc,
+                    cantidad: parsedCant,
+                    neto: parsedNeto
+                });
+            });
+
+            return records;
+        }
+
+        let chartComparativaInstance = null;
+        let chartProductosInstance = null;
+
+        window.onload = function() {
+            lucide.createIcons();
+            populateAlmacenFilter();
+            renderDashboard();
+        };
+
+        function populateAlmacenFilter() {
+            const select = document.getElementById('filterAlmacen');
+            const almacenes = [...new Set(salesData.map(d => d.almacen))].filter(Boolean).sort();
+            select.innerHTML = '<option value="TODOS">Todos los Almacenes</option>';
+            almacenes.forEach(a => {
+                select.innerHTML += `<option value="${a}">${a}</option>`;
+            });
+        }
+
+        function getFilteredData() {
+            const almacenVal = document.getElementById('filterAlmacen').value;
+            const mesVal = document.getElementById('filterMes').value;
+
+            return salesData.filter(d => {
+                const matchAlmacen = (almacenVal === "TODOS") || (d.almacen === almacenVal);
+                const monthStr = d.fecha ? d.fecha.split("-")[1] : "";
+                const matchMes = (mesVal === "TODOS") || (monthStr === mesVal);
+                return matchAlmacen && matchMes;
+            });
+        }
+
+        function renderDashboard() {
+            const filteredData = getFilteredData();
+
+            const totalNeto = filteredData.reduce((acc, i) => acc + (Number(i.neto) || 0), 0);
+            const totalUnidades = filteredData.reduce((acc, i) => acc + (Number(i.cantidad) || 0), 0);
+            const totalRenglones = filteredData.length;
+
+            document.getElementById('kpiVentaTotal').textContent = `$${totalNeto.toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('kpiUnidades').textContent = `${totalUnidades.toLocaleString('es-VE')} UND`;
+            document.getElementById('kpiFacturas').textContent = totalRenglones;
+
+            const aggVendedor = aggregateBy(filteredData, 'vendedor');
+            const aggAlmacen = aggregateBy(filteredData, 'almacen');
+            const aggCliente = aggregateBy(filteredData, 'cliente');
+            const aggProducto = aggregateByProduct(filteredData);
+
+            const topVend = Object.entries(aggVendedor).sort((a,b) => b[1].neto - a[1].neto)[0] || ["-", {neto: 0}];
+            document.getElementById('kpiTopVendedor').textContent = topVend[0];
+            document.getElementById('kpiTopVendedorMonto').textContent = `$${topVend[1].neto.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD`;
+
+            const topAlm = Object.entries(aggAlmacen).sort((a,b) => b[1].neto - a[1].neto)[0] || ["-", {neto: 0}];
+            document.getElementById('kpiTopAlmacen').textContent = topAlm[0];
+            document.getElementById('kpiTopAlmacenMonto').textContent = `$${topAlm[1].neto.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD`;
+
+            renderComparativaChart(aggAlmacen);
+            renderProductosChart(aggProducto);
+
+            renderRankingsList('listVendedores', aggVendedor, 'vendedor');
+            renderRankingsList('listAlmacenes', aggAlmacen, 'almacen');
+            renderRankingsList('listClientes', aggCliente, 'cliente');
+
+            renderProductCatalogTable(aggProducto);
+            renderTransactionsTable(filteredData);
+
+            lucide.createIcons();
+        }
+
+        function aggregateBy(data, key) {
+            return data.reduce((acc, row) => {
+                const val = (row[key] && String(row[key]).trim() !== "") ? String(row[key]).trim() : "OTROS";
+                if (!acc[val]) acc[val] = { neto: 0, cant: 0, count: 0 };
+                acc[val].neto += (Number(row.neto) || 0);
+                acc[val].cant += (Number(row.cantidad) || 0);
+                acc[val].count += 1;
+                return acc;
+            }, {});
+        }
+
+        function aggregateByProduct(data) {
+            return data.reduce((acc, row) => {
+                const cleanCode = String(row.producto || "GENERAL").trim().toUpperCase();
+                const desc = row.descripcion || productDescriptions[cleanCode] || cleanCode;
+                if (!acc[cleanCode]) {
+                    acc[cleanCode] = { code: cleanCode, descripcion: desc, neto: 0, cant: 0, count: 0 };
+                }
+                acc[cleanCode].neto += (Number(row.neto) || 0);
+                acc[cleanCode].cant += (Number(row.cantidad) || 0);
+                acc[cleanCode].count += 1;
+                return acc;
+            }, {});
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            document.getElementById('dropZone').classList.add('border-cyan-500', 'bg-cyan-500/10');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            document.getElementById('dropZone').classList.remove('border-cyan-500', 'bg-cyan-500/10');
+        }
+
+        function handleFileDrop(e) {
+            e.preventDefault();
+            document.getElementById('dropZone').classList.remove('border-cyan-500', 'bg-cyan-500/10');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) processExcelFile(files[0]);
+        }
+
+        function handleExcelUpload(e) {
+            const file = e.target.files[0];
+            if (file) processExcelFile(file);
+        }
+
+        function processExcelFile(file) {
+            const statusText = document.getElementById('uploadStatusText');
+            statusText.textContent = `Procesando "${file.name}"...`;
+            statusText.className = "text-[11px] text-cyan-400 font-bold animate-pulse";
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonRows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+
+                    if (!jsonRows || jsonRows.length === 0) {
+                        alert("El archivo Excel no contiene filas procesables.");
+                        statusText.textContent = "Error en formato de archivo";
+                        statusText.className = "text-[11px] text-rose-400 font-bold";
+                        return;
+                    }
+
+                    const parsedRecords = parseExcelRows(jsonRows);
+
+                    if (parsedRecords.length > 0) {
+                        window.salesData = parsedRecords;
+                        salesData = window.salesData;
+
+                        const totalCalculado = salesData.reduce((a, b) => a + (Number(b.neto) || 0), 0);
+                        statusText.textContent = `✅ Carga exitosa: ${parsedRecords.length} filas por un total de $${totalCalculado.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD desde "${file.name}"`;
+                        statusText.className = "text-[11px] text-emerald-400 font-bold";
+                        populateAlmacenFilter();
+                        renderDashboard();
+                    } else {
+                        alert("No se pudieron interpretar columnas válidas en el archivo.");
+                        statusText.textContent = "Columnas no reconocidas";
+                        statusText.className = "text-[11px] text-amber-400 font-bold";
+                    }
+                } catch (err) {
+                    console.error("Error al procesar Excel:", err);
+                    alert("Ocurrió un error al leer el archivo Excel: " + err.message);
+                    statusText.textContent = "Error al procesar el archivo";
+                    statusText.className = "text-[11px] text-rose-400 font-bold";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function renderComparativaChart(aggAlmacen) {
+            const ctx = document.getElementById('chartComparativa').getContext('2d');
+            if (chartComparativaInstance) chartComparativaInstance.destroy();
+
+            const sorted = Object.entries(aggAlmacen).sort((a,b) => b[1].neto - a[1].neto);
+            const labels = sorted.map(i => i[0]);
+            const data = sorted.map(i => i[1].neto);
+
+            chartComparativaInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Ventas Totales ($ USD)',
+                        data: data,
+                        backgroundColor: '#06b6d4',
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `$${context.raw.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+                    }
+                }
+            });
+        }
+
+        function renderProductosChart(aggProducto) {
+            const ctx = document.getElementById('chartProductos').getContext('2d');
+            if (chartProductosInstance) chartProductosInstance.destroy();
+
+            const sorted = Object.entries(aggProducto).sort((a,b) => b[1].neto - a[1].neto).slice(0, 6);
+            const labels = sorted.map(i => i[1].descripcion.length > 25 ? i[1].descripcion.substring(0,25) + '...' : i[1].descripcion);
+            const data = sorted.map(i => i[1].neto);
+
+            chartProductosInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'],
+                        borderWidth: 2,
+                        borderColor: '#0f172a'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 10 } } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.label}: $${context.raw.toLocaleString('es-VE', {minimumFractionDigits: 2})}`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        function renderRankingsList(elementId, aggregatedObj, entityType) {
+            const container = document.getElementById(elementId);
+            container.innerHTML = '';
+
+            const sorted = Object.entries(aggregatedObj).sort((a,b) => b[1].neto - a[1].neto);
+            const maxVal = sorted[0] ? sorted[0][1].neto : 1;
+
+            sorted.forEach(([name, metrics], idx) => {
+                const pct = Math.max(5, ((metrics.neto / maxVal) * 100).toFixed(0));
+                const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const itemHtml = `
+                    <div onclick="openDrillDownModal('${entityType}', '${safeName}')" class="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/50 cursor-pointer transition space-y-1.5 group">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-bold text-slate-200 group-hover:text-cyan-400 flex items-center gap-1.5 overflow-hidden">
+                                <span class="text-[10px] text-slate-500 shrink-0">#${idx + 1}</span>
+                                <span class="truncate" title="${name}">${name}</span>
+                            </span>
+                            <span class="font-extrabold text-emerald-400 shrink-0 ml-2">$${metrics.neto.toLocaleString('es-VE', {minimumFractionDigits: 2})}</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div class="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full" style="width: ${pct}%"></div>
+                            </div>
+                            <span class="whitespace-nowrap font-medium">${metrics.cant} UNID</span>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', itemHtml);
+            });
+        }
+
+        function renderProductCatalogTable(aggProducto) {
+            const tbody = document.getElementById('tableProductsBody');
+            tbody.innerHTML = '';
+
+            Object.entries(aggProducto).sort((a,b) => b[1].neto - a[1].neto).forEach(([code, p]) => {
+                const safeCode = code.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const row = `
+                    <tr class="hover:bg-slate-800/40 transition border-b border-slate-800/50">
+                        <td class="py-3 px-4 font-bold text-cyan-400 whitespace-nowrap">${code}</td>
+                        <td class="py-3 px-4 text-slate-200 font-semibold">${p.descripcion}</td>
+                        <td class="py-3 px-4 text-center font-semibold text-slate-300">${p.count}</td>
+                        <td class="py-3 px-4 text-center font-bold text-slate-200">${p.cant}</td>
+                        <td class="py-3 px-4 text-right font-extrabold text-emerald-400">$${p.neto.toLocaleString('es-VE', {minimumFractionDigits: 2})}</td>
+                        <td class="py-3 px-4 text-center">
+                            <button onclick="openDrillDownModal('producto', '${safeCode}')" class="px-2.5 py-1 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-400 border border-cyan-500/30 rounded text-[11px] font-semibold transition">
+                                Ver Facturas
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
+        function renderTransactionsTable(data) {
+            const tbody = document.getElementById('tableTransactionsBody');
+            tbody.innerHTML = '';
+
+            data.forEach(row => {
+                const tr = `
+                    <tr class="hover:bg-slate-800/40 transition border-b border-slate-800/50 text-xs">
+                        <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">${row.empresa}</span></td>
+                        <td class="py-2.5 px-3 font-mono font-semibold text-slate-300">${row.factura}</td>
+                        <td class="py-2.5 px-3 text-slate-400">${row.fecha}</td>
+                        <td class="py-2.5 px-3 font-semibold text-slate-200">${row.vendedor}</td>
+                        <td class="py-2.5 px-3 text-slate-300">${row.almacen}</td>
+                        <td class="py-2.5 px-3 text-slate-300 truncate max-w-[150px]">${row.cliente}</td>
+                        <td class="py-2.5 px-3 font-bold text-cyan-400 truncate max-w-[150px]" title="${row.descripcion}">${row.descripcion || row.producto}</td>
+                        <td class="py-2.5 px-3 text-center font-bold">${row.cantidad}</td>
+                        <td class="py-2.5 px-3 text-right font-extrabold text-emerald-400">$${(Number(row.neto) || 0).toLocaleString('es-VE', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', tr);
+            });
+        }
+
+        // GENERACIÓN COMPLETA Y DINÁMICA DE INFORME PDF
+        function generatePDFReport() {
+            const btn = document.getElementById('btnGeneratePDF');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Generando PDF...`;
+            btn.disabled = true;
+
+            setTimeout(() => {
+                const filteredData = getFilteredData();
+                const totalNeto = filteredData.reduce((acc, i) => acc + (Number(i.neto) || 0), 0);
+                const totalUnidades = filteredData.reduce((acc, i) => acc + (Number(i.cantidad) || 0), 0);
+                const totalRenglones = filteredData.length;
+
+                const aggVendedor = aggregateBy(filteredData, 'vendedor');
+                const aggAlmacen = aggregateBy(filteredData, 'almacen');
+                const aggCliente = aggregateBy(filteredData, 'cliente');
+                const aggProducto = aggregateByProduct(filteredData);
+
+                const sortedVendedores = Object.entries(aggVendedor).sort((a,b) => b[1].neto - a[1].neto);
+                const sortedAlmacenes = Object.entries(aggAlmacen).sort((a,b) => b[1].neto - a[1].neto);
+                const sortedClientes = Object.entries(aggCliente).sort((a,b) => b[1].neto - a[1].neto);
+                const sortedProductos = Object.entries(aggProducto).sort((a,b) => b[1].neto - a[1].neto);
+
+                // 1. Datos Generales & Encabezado
+                document.getElementById('pdfFechaEmision').textContent = new Date().toLocaleDateString('es-VE') + ' ' + new Date().toLocaleTimeString('es-VE', {hour: '2-digit', minute:'2-digit'});
+                document.getElementById('pdfFiltroAlmacen').textContent = document.getElementById('filterAlmacen').value;
+                document.getElementById('pdfFiltroMes').textContent = document.getElementById('filterMes').value;
+
+                // 2. KPIs Top Cards
+                document.getElementById('pdfKpiVentas').textContent = `$${totalNeto.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD`;
+                document.getElementById('pdfKpiUnidades').textContent = `${totalUnidades.toLocaleString('es-VE')} UND`;
+                document.getElementById('pdfKpiRenglones').textContent = totalRenglones;
+
+                const topVend = sortedVendedores[0] || ["-", {neto: 0}];
+                document.getElementById('pdfKpiVendedor').textContent = topVend[0];
+                document.getElementById('pdfKpiVendedorMonto').textContent = `$${topVend[1].neto.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD`;
+
+                const topAlm = sortedAlmacenes[0] || ["-", {neto: 0}];
+                document.getElementById('pdfKpiAlmacen').textContent = topAlm[0];
+                document.getElementById('pdfKpiAlmacenMonto').textContent = `$${topAlm[1].neto.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD`;
+
+                // 3. Renderizar imágenes de los gráficos de Chart.js
+                if (chartComparativaInstance) {
+                    document.getElementById('pdfImgChartComparativa').src = chartComparativaInstance.toBase64Image();
+                }
+                if (chartProductosInstance) {
+                    document.getElementById('pdfImgChartProductos').src = chartProductosInstance.toBase64Image();
+                }
+
+                // 4. Llenar Ranking de Vendedores
+                const tbodyVend = document.getElementById('pdfTableVendedores');
+                tbodyVend.innerHTML = '';
+                sortedVendedores.forEach(([vend, metrics]) => {
+                    tbodyVend.innerHTML += `
+                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding: 3px; font-weight: bold;">${vend}</td>
+                            <td style="padding: 3px; text-align: center;">${metrics.cant}</td>
+                            <td style="padding: 3px; text-align: right; color: #16a34a; font-weight: bold;">$${metrics.neto.toLocaleString('es-VE', {minimumFractionDigits: 2})}</td>
+                        </tr>
+                    `;
+                });
+
+                // 5. Llenar Ranking de Almacenes
+                const tbodyAlm = document.getElementById('pdfTableAlmacenes');
+                tbodyAlm.innerHTML = '';
+                sortedAlmacenes.forEach(([alm, metrics]) => {
+                    tbodyAlm.innerHTML += `
+                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding: 3px; font-weight: bold;">${alm}</td>
+                            <td style="padding: 3px; text-align: center;">${metrics.cant}</td>
+                            <td style="padding: 3px; text-align: right; color: #0284c7; font-weight: bold;">$${metrics.neto.toLocaleString('es-VE', {minimumFractionDigits: 2})}</td>
+                        </tr>
+                    `;
+                });
+
+                // 6. Llenar Ranking de Clientes
+                const tbodyCli = document.getElementById('pdfTableClientes');
+                tbodyCli.innerHTML = '';
+                sortedClientes.forEach(([cli, metrics]) => {
+                    tbodyCli.innerHTML += `
+                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding: 3px; font-weight: 600; font-size: 8px;">${cli}</td>
+                            <td style="padding: 3px; text-align: right; font-weight: bold;">$${metrics.neto.toLocaleString('es-VE', {minimumFractionDigits: 2})}</td>
+                        </tr>
+                    `;
+                });
+
+                // 7. Llenar Catálogo y Rendimiento por Producto
+                const tbodyProd = document.getElementById('pdfTableProductos');
+                tbodyProd.innerHTML = '';
+                sortedProductos.forEach(([code, p]) => {
+                    tbodyProd.innerHTML += `
+                        <tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding: 4px; font-weight: bold; color: #0284c7;">${code}</td>
+                            <td style="padding: 4px; font-weight: 600;">${p.descripcion}</td>
+                            <td style="padding: 4px; text-align: center;">${p.count}</td>
+                            <td style="padding: 4px; text-align: center; font-weight: bold;">${p.cant}</td>
+                            <td style="padding: 4px; text-align: right; font-weight: bold; color: #16a34a;">$${p.neto.toLocaleString('es-VE', {minimumFractionDigits: 2})}</td>
+                        </tr>
+                    `;
+                });
+
+                // 8. Llenar Registro Detallado de Operaciones y Facturas (Transacciones)
+                const tbodyTrans = document.getElementById('pdfTableTransacciones');
+                tbodyTrans.innerHTML = '';
+                filteredData.forEach(row => {
+                    tbodyTrans.innerHTML += `
+                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                            <td style="padding: 3px; font-weight: bold; color: #0284c7;">${row.empresa}</td>
+                            <td style="padding: 3px; font-family: monospace;">${row.factura}</td>
+                            <td style="padding: 3px; color: #64748b;">${row.fecha}</td>
+                            <td style="padding: 3px;">${row.vendedor}</td>
+                            <td style="padding: 3px;">${row.almacen}</td>
+                            <td style="padding: 3px; font-size: 8px;">${row.cliente}</td>
+                            <td style="padding: 3px; font-weight: bold; font-size: 8px;">${row.descripcion || row.producto}</td>
+                            <td style="padding: 3px; text-align: center; font-weight: bold;">${row.cantidad}</td>
+                            <td style="padding: 3px; text-align: right; font-weight: bold; color: #16a34a;">$${(Number(row.neto) || 0).toLocaleString('es-VE', {minimumFractionDigits: 2})}</td>
+                        </tr>
+                    `;
+                });
+
+                // Exportación a PDF con html2pdf
+                const element = document.getElementById('pdfReportContainer');
+                const opt = {
+                    margin:       8,
+                    filename:     `Informe_Ejecutivo_MAXIFER_${new Date().toISOString().split('T')[0]}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                html2pdf().set(opt).from(element).save().then(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    lucide.createIcons();
+                });
+            }, 300);
+        }
+
+        function openDrillDownModal(type, key) {
+            const modal = document.getElementById('detailModal');
+            const title = document.getElementById('modalTitle');
+            const subtitle = document.getElementById('modalSubtitle');
+            const content = document.getElementById('modalContent');
+
+            modal.classList.remove('hidden');
+
+            const fieldMap = {
+                'vendedor': 'vendedor',
+                'almacen': 'almacen',
+                'cliente': 'cliente',
+                'producto': 'producto'
+            };
+
+            const field = fieldMap[type] || type;
+            const matches = salesData.filter(d => String(d[field]).toUpperCase() === String(key).toUpperCase());
+            const totalMonto = matches.reduce((a,b) => a + (Number(b.neto) || 0), 0);
+            const totalCant = matches.reduce((a,b) => a + (Number(b.cantidad) || 0), 0);
+
+            if (type === 'vendedor') {
+                title.textContent = `Expediente Vendedor: ${key}`;
+                subtitle.textContent = `Ventas Totales: $${totalMonto.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD (${totalCant} Unidades)`;
+            } else if (type === 'almacen') {
+                title.textContent = `Informe Almacén: ${key}`;
+                subtitle.textContent = `Despachos Totales: $${totalMonto.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD (${totalCant} Unidades)`;
+            } else if (type === 'cliente') {
+                title.textContent = `Historial Cliente: ${key}`;
+                subtitle.textContent = `Facturación Acumulada: $${totalMonto.toLocaleString('es-VE', {minimumFractionDigits: 2})} USD`;
+            } else if (type === 'producto') {
+                const desc = productDescriptions[key] || key;
+                title.textContent = `Producto: ${key}`;
+                subtitle.textContent = desc;
+            }
+
+            let html = `
+                <div class="font-bold text-slate-200 mb-2">Desglose de Transacciones (${matches.length} Renglones)</div>
+                <div class="overflow-x-auto border border-slate-800 rounded-xl">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-800">
+                            <tr>
+                                <th class="py-2 px-3">Empresa</th>
+                                <th class="py-2 px-3">N° Doc</th>
+                                <th class="py-2 px-3">Fecha</th>
+                                <th class="py-2 px-3">Cliente</th>
+                                <th class="py-2 px-3">Producto / Descripción</th>
+                                <th class="py-2 px-3 text-center">Cant.</th>
+                                <th class="py-2 px-3 text-right">Neto ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60">
+            `;
+
+            matches.forEach(m => {
+                html += `
+                    <tr class="hover:bg-slate-800/30">
+                        <td class="py-2 px-3 font-semibold text-cyan-400">${m.empresa}</td>
+                        <td class="py-2 px-3 font-mono">${m.factura}</td>
+                        <td class="py-2 px-3 text-slate-400">${m.fecha}</td>
+                        <td class="py-2 px-3 text-slate-200 truncate max-w-[120px]">${m.cliente}</td>
+                        <td class="py-2 px-3 font-bold text-slate-100 truncate max-w-[150px]">${m.descripcion || m.producto}</td>
+                        <td class="py-2 px-3 text-center font-bold">${m.cantidad}</td>
+                        <td class="py-2 px-3 text-right font-extrabold text-emerald-400">$${(Number(m.neto) || 0).toLocaleString('es-VE', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            content.innerHTML = html;
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').classList.add('hidden');
+        }
+
+        function filterProductTable() {
+            const input = document.getElementById('searchProduct').value.toUpperCase();
+            const rows = document.getElementById('tableProductsBody').getElementsByTagName('tr');
+            for (let i = 0; i < rows.length; i++) {
+                const text = rows[i].textContent || rows[i].innerText;
+                rows[i].style.display = text.toUpperCase().indexOf(input) > -1 ? "" : "none";
+            }
+        }
+
+        function exportCSV() {
+            let csv = "Empresa,Factura,Fecha,Vendedor,Almacen,Cliente,CodigoProducto,Descripcion,Cantidad,NetoUSD\n";
+            salesData.forEach(r => {
+                csv += `"${r.empresa}","${r.factura}","${r.fecha}","${r.vendedor}","${r.almacen}","${(r.cliente||'').replace(/"/g, '""')}","${r.producto}","${(r.descripcion||'').replace(/"/g, '""')}",${r.cantidad},${r.neto}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "Ventas_MAXIFER.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        window.openDrillDownModal = openDrillDownModal;
+        window.closeModal = closeModal;
+        window.filterProductTable = filterProductTable;
+        window.exportCSV = exportCSV;
+        window.renderDashboard = renderDashboard;
+        window.generatePDFReport = generatePDFReport;
+    </script>
+</body>
+</html>
